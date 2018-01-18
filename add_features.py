@@ -11,15 +11,18 @@ import matplotlib.pyplot as plt
 import numpy as np
 from collections import Counter
 import gensim, logging
+# from nltk.corpsentiment_featuresport sentiwordnet as swn
+import pandas as pd
 import pdb
 
 def get_description_length(desc):
     tokens = nltk.word_tokenize(desc)
     return len(tokens)
 
-def get_description_sentiment(vader_analyzer, desc):
-    polarity_score = vader_analyzer.polarity_scores(desc)
-    return polarity_score['pos']
+def get_description_sentiment():
+    df = pd.read_csv("liwc.txt", sep='\t')
+    df_sentiment_features = df.drop(['Segment'], axis=1)
+    df_sentiment_features.to_csv('sentiment_features.csv')
 
 def word_doc_similarity(text1, text2):
     tfidf = TfidfVectorizer().fit_transform([text1, text2])
@@ -33,7 +36,6 @@ def aggregate_lender_motivations():
             lender_motivation = items[1]
             all_motivations += lender_motivation
     return all_motivations
-
 
 def getDicMo():
     try:
@@ -113,17 +115,14 @@ def getSimilarity(count_dic1, count_dic2):
 
 
 def main():
-    feature_headings = ['id', 'status', 'sector', 'posted_date', 'funded_date', 'loan_amount', 'partner_id', 'bonus_credit_eligibility', 
-            'lender_count', 'activity', 'use', 'repayment_term', 'repayment_interval', 'num_tags', 'num_images', 'video_present', 
-            'country_code', 'description']
-    fo = open('features_test.csv', 'w', encoding='latin-1', newline='')
+    fo = open('features.csv', 'w', encoding='latin-1', newline='')
     csv_writer = csv.writer(fo, delimiter=',')
 
     d = getDicMo()
     sorted_keys = sorted(d.keys())
     print("Sorted Keys: ", sorted_keys)
 
-    with open('features.csv', 'r', encoding='latin-1') as f:
+    with open('features_test.csv', 'r', encoding='latin-1') as f:
         csv_reader = csv.reader(f)
 
         count = 0
@@ -153,4 +152,47 @@ def main():
                 csv_writer.writerow(row)
     fo.close()
 
-main()
+def add_feature_values(filename):
+    fo = open('features_test.csv', 'w', encoding='latin-1', newline='')
+    csv_writer = csv.writer(fo, delimiter=',')
+
+    items = [[None for x in range(94)] for y in range(993981)]
+    feature_headings = []
+    item_count = 0
+    f2 = open(filename)
+    csv_reader2 = csv.reader(f2)
+    for row in csv_reader2:
+        item_count += 1
+        if item_count == 1:
+            feature_headings = row[1:]
+        else:
+            i = int(row[0].replace('.txt',''))
+            items[i] = row[1:]
+    f2.close()
+
+    with open('features.csv', 'r', encoding='latin-1') as f:
+        csv_reader = csv.reader(f)
+        count = 0
+        for row in csv_reader:
+            count += 1
+            if count%10000 == 0:
+                print("Count: ", count)
+            if count == 1:
+                headings = row
+                desc_index = headings.index('description')
+                headings.pop(desc_index)
+                for heading in feature_headings:
+                    headings.append(heading)
+                csv_writer.writerow(headings)
+            else:
+                loan_id = int(row[0])
+                # pdb.set_trace()
+                row.pop(desc_index)
+                for item in items[loan_id]:
+                    row.append(item)
+                csv_writer.writerow(row)
+    fo.close()
+
+# main()
+# get_description_sentiment()
+add_feature_values('sentiment_features.csv')

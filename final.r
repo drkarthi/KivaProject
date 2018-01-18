@@ -4,7 +4,9 @@ library(readr)
 library(pROC)
 library (ROCR)
 
-loans <- read_csv("loans_test.csv")
+# read test data
+loans <- read_csv("features_test.csv")
+# omit missing data for test data
 loans[!is.na(loans$sector),]
 loans[!is.na(loans$loan_amount),]
 loans[!is.na(loans$repayment_term),]
@@ -21,28 +23,46 @@ loans$video_present <- as.logical(loans$video_present)
 
 #(1 --> unfunded, 0--> funded)
 loans$lgAmount=log(loans$loan_amount)
-loans$funded_or_not <-rep(1,dim(loans)[1])
+loans$funded_or_not <-rep(2,dim(loans)[1])
+# assign true labels
 loans$funded_or_not[loans$status == 'defaulted' | loans$status == 'funded'| loans$status == 'in_repayment'| loans$status == 'paid'] = 0
 loans$funded_or_not[loans$status == 'expired' | loans$status == 'inactive_expired'] = 1
 loans$funded_or_not <-factor(loans$funded_or_not)
 
-head(loans)
-
 loansAllNotFund=loans[loans$funded_or_not==1,]
 N1=dim(loansAllNotFund)[1]
-test = sample(N1, as.integer(N1/5))
-UnfundedTest =loansAllNotFund[test, ]
-UnfundedTrain=loansAllNotFund[-test,]
+set.seed(7)
+# Convert unfunded loans into training, validation and test sets
+ssUnfunded = sample(1:3, size=N1, replace=T, prob=c(0.6,0.2,0.2))
+UnfundedTrain = loansAllNotFund[ssUnfunded==1, ]
+UnfundedValidation = loansAllNotFund[ssUnfunded==2, ]
+UnfundedTest = loansAllNotFund[ssUnfunded==3, ]
+#UnfundedTest = sample(loansAllNotFund, replace=F, size=0.2*N1)
+#nonTest = loansAllNotFund[-UnfundedTest,]
+#UnfundedValidation = sample(nonTest, replace=F, size=0.2*N1)
+#UnfundedTrain=nonTest[-test,]
 
 loansAllFund=loans[loans$funded_or_not==0,]
 N2=dim(loansAllFund)[1]
-test2 = sample(N2, as.integer(N2/5))
-fundedTest =loansAllFund[test2, ]
-fundedTrain=loansAllFund[-test2,]
+set.seed(7)
+ssFunded = sample(1:3, size=N2, replace=T, prob=c(0.6,0.2,0.2))
+fundedTrain = loansAllFund[ssFunded==1, ]
+fundedValidation = loansAllFund[ssFunded==2, ]
+fundedTest = loansAllFund[ssFunded==3, ]
+#test2 = sample(N2, as.integer(N2/5))
+#fundedTest =loansAllFund[test2, ]
+#fundedTrain=loansAllFund[-test2,]
+
+rm(loansAllFund)
+rm(loansAllNotFund)
 
 AllTest = rbind(UnfundedTest,fundedTest)
 write.csv(AllTest, file = "AllTest.csv", row.names = FALSE)
+rm(AllTest)
 
+AllValidation = rbind(UnfundedValidation, fundedValidation)
+write.csv(AllValidation, file = "AllValidation.csv", row.names = FALSE)
+rm(AllValidation)
 ##############Origanl Data#####################
 AllTrain = rbind(UnfundedTrain,fundedTrain)
 write.csv(AllTrain, file = "AllTrain.csv", row.names = FALSE)
