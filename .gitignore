@@ -1,0 +1,2 @@
+# ignore csv files since they are large #
+*.csv
