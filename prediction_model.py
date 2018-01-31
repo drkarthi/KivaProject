@@ -30,10 +30,10 @@ def train_lr(X_train, y_train):
 	model.fit(X_train, y_train)
 	return model
 
-def predict_lr(model, X_test, y_test):
+def predict_lr(model, X_val, y_val):
 	print("-----------Predicting--------------")
-	pred = model.predict(X_test)
-	probs = model.predict_proba(X_test)
+	pred = model.predict(X_val)
+	probs = model.predict_proba(X_val)
 	unfunded_prob = probs[:, 1]
 	return pred, unfunded_prob
 
@@ -47,7 +47,7 @@ def get_auc_score(y, unfunded_prob):
 	plt.xlabel('False Positive Rate')
 	plt.ylabel('True Positive Rate')
 	plt.show()
-	auc_score = skmetric.roc_auc_score(y_true=y==1, y_score=unfunded_prob,)
+	auc_score = skmetric.roc_auc_score(y_true=np.array(y)==1, y_score=unfunded_prob,)
 	return auc_score
 
 def main():
@@ -58,65 +58,72 @@ def main():
 	# predictors = predictors + ['posemo', 'negemo', 'i'] + ['funded_or_not']
 
 	df_cols = pd.read_csv("AllTrain.csv", nrows = 0)
-	predictors = df_cols.columns.tolist()
+	# predictors = df_cols.columns.tolist()
 
 	print("-----------Reading the data--------------")
 	# get the training set
 	df_train_all = pd.read_csv('AllTrain.csv', encoding='cp1252')
-	df_train_incomplete = df_train_all[predictors]
-	df_train_incomplete_float = df_train_incomplete.select_dtypes(include=['float'])
-	df_train_incomplete_object = df_train_incomplete.select_dtypes(include=['object'])
-	df_train_incomplete_other = df_train_incomplete.select_dtypes(exclude=['float', 'object'])
-	pdb.set_trace()
+	df_train_all['is_train'] = 1
+	df_val_all = pd.read_csv('AllValidation.csv', encoding='cp1252')
+	df_val_all['is_train'] = 0
+	df_all = pd.concat([df_train_all, df_val_all])
+
+	df_incomplete = df_all
+	df_incomplete_float = df_incomplete.select_dtypes(include=['float'])
+	df_incomplete_object = df_incomplete.select_dtypes(include=['object'])
+	df_incomplete_other = df_incomplete.select_dtypes(exclude=['float', 'object'])
+	# pdb.set_trace()
 
 	print("------------Filling the missing values------------")
-	arr_train_complete_float = SimpleFill().complete(df_train_incomplete_float)
-	df_train_float = pd.DataFrame(arr_train_complete_float, columns = df_train_incomplete_float.columns)
+	arr_complete_float = SimpleFill().complete(df_incomplete_float)
+	df_float = pd.DataFrame(arr_complete_float, columns = df_incomplete_float.columns)
 
 	# drop date fields and the filename field
-	df_train_incomplete_object = df_train_incomplete_object.drop(['funded_date', 'posted_date'], axis = 1)
+	df_incomplete_object = df_incomplete_object.drop(['funded_date', 'posted_date'], axis = 1)
 	# convert na into a category for string fields
-	df_train_object = df_train_incomplete_object.fillna("Missing Value")
-	pdb.set_trace()
+	df_object = df_incomplete_object.fillna("Missing Value")
+	# pdb.set_trace()
 	
 	print("------------Concatenating the dataframes------------")
-	df = pd.concat([df_train_float, df_train_object, df_train_incomplete_other], axis = 1)
+	df_complete = pd.concat([df_float, df_object, df_incomplete_other], axis = 1, join = 'inner')
+	# pdb.set_trace()
 	# TODO: Add features from the posted date
-	X_train = df.drop(['funded_or_not', 'use', 'activity', 'lender_count', 'status', 'num_images'], axis=1)
-	X_train = preprocess(X_train)
-	X_train = pd.get_dummies(X_train, columns=['repayment_interval', 'country_code', 'partner_id', 'language', 'sector'], sparse=True)
+	df_drop = df_complete.drop(['use', 'activity', 'lender_count', 'status', 'num_images'], axis=1)
+	df_clean = preprocess(df_drop)
+	df = pd.get_dummies(df_clean, columns=['repayment_interval', 'country_code', 'partner_id', 'language', 'sector'], sparse=True)
+	
+	# pdb.set_trace()
 	# X_train_scaled = skp.scale(X_train)
-	y_train = df['funded_or_not']
-	pdb.set_trace()
+	df_train = df[df.is_train == 1]
+	X_train = df_train.drop(['funded_or_not'], axis=1)
+	y_train = df_train['funded_or_not']
+	# pdb.set_trace()
 	ros = RandomOverSampler(random_state=42)
 	# X_train, y_train= ros.fit_sample(X_train, y_train)
-	pdb.set_trace()
+	# pdb.set_trace()
 	# means = [np.mean(X_train[:,i]) for i in range(len(X_train[0]))]
 	# std_devs = [np.std(X_train[:,i]) for i in range(len(X_train[0]))]
 
 	# get the validation set
-	df_test_all = pd.read_csv('AllValidation.csv', encoding='cp1252')
-	df_test = df_test_all[predictors].dropna()
-	X_test = df_test[predictors].drop(['funded_or_not', 'use', 'activity', 'lender_count', 'status', 'num_images', 'funded_date', 'posted_date'], axis=1)
-	X_test = preprocess(X_test)
-	X_test = pd.get_dummies(X_test, columns=['repayment_interval', 'country_code', 'partner_id', 'language', 'sector'], sparse=True)
-	# X_test_scaled = skp.scale(X_test)
-	y_test = df_test[predictors[-1]]
-	y_list = y_test.tolist()
-	n_test = len(y_list)
-	pdb.set_trace()
+	# X_val_scaled = skp.scale(X_val)
+	df_val = df[df.is_train == 0]
+	X_val = df_val.drop(['funded_or_not'], axis=1)
+	y_val = df_val['funded_or_not']
+	y_list = y_val.tolist()
+	n_val = len(y_list)
+	# pdb.set_trace()
 
 	# get the results and evaluation
 	beta = 2
 	model = train_lr(X_train, y_train)
-	pred, unfunded_prob = predict_lr(model, X_test, y_test)
-	auc_score = get_auc_score(y_test, unfunded_prob)
-	print('Predictors: ', predictors)
+	pred, unfunded_prob = predict_lr(model, X_val, y_val)
+	auc_score = get_auc_score(y_val, unfunded_prob)
+	# print('Predictors: ', predictors)
 	print('AUC Score: ', auc_score)
-	tp = len([x for x in range(n_test) if pred[x]==1 and y_list[x]==1])
-	tn = len([x for x in range(n_test) if pred[x]==0 and y_list[x]==0])
-	fp = len([x for x in range(n_test) if pred[x]==1 and y_list[x]==0])
-	fn = len([x for x in range(n_test) if pred[x]==0 and y_list[x]==1])
+	tp = len([x for x in range(n_val) if pred[x]==1 and y_list[x]==1])
+	tn = len([x for x in range(n_val) if pred[x]==0 and y_list[x]==0])
+	fp = len([x for x in range(n_val) if pred[x]==1 and y_list[x]==0])
+	fn = len([x for x in range(n_val) if pred[x]==0 and y_list[x]==1])
 	precision = tp/(tp+fp)
 	recall = tp/(tp+fn)
 	f1 = 2*precision*recall/(precision+recall)
@@ -133,15 +140,15 @@ def main():
 	"""
 	Feature Importance
 	"""
-	# cols = X_test.columns
+	# cols = X_val.columns
 	# coefs = model.coef_[0]
 	# econ_significance = [[cols[i], coefs[i]*std_devs[i]] for i in range(len(cols))]
 	# pd.DataFrame(econ_significance).to_csv('economic_significance.csv')
 	# feat_selector = BorutaPy(model, n_estimators='auto', verbose=2, random_state=1)
-	# feat_selector.fit(X_test, y_test)
+	# feat_selector.fit(X_val, y_val)
 	# pdb.set_trace()
-	# mi = mutual_info_classif(X_test, y_test)
-	# df_summary = pd.DataFrame([X_test.columns, model.coef_[0], mi])
+	# mi = mutual_info_classif(X_val, y_val)
+	# df_summary = pd.DataFrame([X_val.columns, model.coef_[0], mi])
 	# df_summary.transpose().to_csv('summary.csv')
 	# scores, pvalues = skfs.chi2(X_train, y_train)
 	# df_pval = pd.DataFrame([[cols[i], pvalues[i]] for i in range(len(cols))])
